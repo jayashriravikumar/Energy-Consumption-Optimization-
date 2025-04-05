@@ -16,17 +16,35 @@ import plotly.express as px
 # Initialize Spark Session
 spark = SparkSession.builder.appName("EnergyConsumptionOptimization").getOrCreate()
 
-# Load and display the data
-df_pd = pd.read_csv("D:\Energy-Consumption-Optimization-\Dataset.csv")  # Replace with your actual CSV file path
-df_spark = spark.createDataFrame(df_pd)
+df_spark = spark.read.csv("D:/Energy-Consumption-Optimization-/Dataset.csv", header=True, inferSchema=True)
+
+# Convert to Pandas once for UI controls (like dropdown)
+df_pd_preview = df_spark.select("Building Type").distinct().toPandas()
 
 st.set_page_config(layout="wide")
-st.title("🔋 Energy Consumption Optimization")
-# st.markdown("This dashboard uses **Big Data Analytics** to forecast energy consumption, detect anomalies, and recommend optimal usage strategies for residential, commercial, and industrial sectors.")
+st.title(" Energy Consumption Optimization")
 
-# Sidebar for filtering building types
-building_type = st.sidebar.selectbox("🏢 Select Building Type", df_pd['Building Type'].unique())
-df_filtered = df_pd[df_pd['Building Type'] == building_type]
+# Sidebar
+building_type = st.sidebar.selectbox("🏢 Select Building Type", df_pd_preview['Building Type'].unique())
+
+# Filter Spark DataFrame
+df_filtered_spark = df_spark.filter(df_spark["Building Type"] == building_type)
+
+# Convert filtered Spark DataFrame to Pandas for visualizations & ML
+df_filtered = df_filtered_spark.toPandas()
+df_pd = df_spark.toPandas()
+
+# # Load and display the data
+# df_pd = pd.read_csv("D:\Energy-Consumption-Optimization-\Dataset.csv")  # Replace with your actual CSV file path
+# df_spark = spark.createDataFrame(df_pd)
+
+# st.set_page_config(layout="wide")
+# st.title("🔋 Energy Consumption Optimization")
+# # st.markdown("This dashboard uses **Big Data Analytics** to forecast energy consumption, detect anomalies, and recommend optimal usage strategies for residential, commercial, and industrial sectors.")
+
+# # Sidebar for filtering building types
+# building_type = st.sidebar.selectbox("🏢 Select Building Type", df_pd['Building Type'].unique())
+# df_filtered = df_pd[df_pd['Building Type'] == building_type]
 
 # Layout grid
 col1, col2 = st.columns(2)

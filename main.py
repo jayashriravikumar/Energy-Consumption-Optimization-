@@ -17,7 +17,7 @@ import plotly.express as px
 spark = SparkSession.builder.appName("EnergyConsumptionOptimization").getOrCreate()
 
 # Load and display the data
-df_pd = pd.read_csv("D:\ECO\Dataset.csv")  # Replace with your actual CSV file path
+df_pd = pd.read_csv("D:\Energy-Consumption-Optimization-\Dataset.csv")  # Replace with your actual CSV file path
 df_spark = spark.createDataFrame(df_pd)
 
 st.set_page_config(layout="wide")
@@ -42,7 +42,7 @@ with col1:
 with col2:
     st.subheader("📊 Energy vs Square Footage")
     fig_scatter = px.scatter(df_filtered, x='Square Footage', y='Energy Consumption', color='Building Type',
-                             title="Square Footage vs Energy Consumption")
+                             title="Energy Consumption vs Square Footage")
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 # 3. Heatmap of Correlation Matrix

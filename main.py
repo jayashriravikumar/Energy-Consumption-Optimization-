@@ -13,16 +13,21 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 
+
+
 # Initialize Spark Session
 spark = SparkSession.builder.appName("EnergyConsumptionOptimization").getOrCreate()
 
 df_spark = spark.read.csv("D:/Energy-Consumption-Optimization-/Dataset.csv", header=True, inferSchema=True)
+
 
 # Convert to Pandas once for UI controls (like dropdown)
 df_pd_preview = df_spark.select("Building Type").distinct().toPandas()
 
 st.set_page_config(layout="wide")
 st.title(" Energy Consumption Optimization")
+
+st.markdown("###")
 
 # Sidebar
 building_type = st.sidebar.selectbox("🏢 Select Building Type", df_pd_preview['Building Type'].unique())
@@ -34,17 +39,46 @@ df_filtered_spark = df_spark.filter(df_spark["Building Type"] == building_type)
 df_filtered = df_filtered_spark.toPandas()
 df_pd = df_spark.toPandas()
 
-# # Load and display the data
-# df_pd = pd.read_csv("D:\Energy-Consumption-Optimization-\Dataset.csv")  # Replace with your actual CSV file path
-# df_spark = spark.createDataFrame(df_pd)
 
-# st.set_page_config(layout="wide")
-# st.title("🔋 Energy Consumption Optimization")
-# # st.markdown("This dashboard uses **Big Data Analytics** to forecast energy consumption, detect anomalies, and recommend optimal usage strategies for residential, commercial, and industrial sectors.")
+# Anomaly Detection using Isolation Forest
+iso_model = IsolationForest(contamination=0.1)
+df_filtered['Anomaly'] = iso_model.fit_predict(df_filtered[['Energy Consumption']])
 
-# # Sidebar for filtering building types
-# building_type = st.sidebar.selectbox("🏢 Select Building Type", df_pd['Building Type'].unique())
-# df_filtered = df_pd[df_pd['Building Type'] == building_type]
+# Add a container for better layout control
+with st.container():
+    st.subheader("Key Metrics")
+
+    # Create 3 columns side-by-side
+    col1, col2, col3 = st.columns(3)
+
+    # 1. Total Consumption
+    with col1:
+        st.metric(
+            label="🔋 Total Consumption (kWh)",
+            value=f"{df_filtered['Energy Consumption'].sum():,.2f}",
+            help="Total energy consumed for the selected building type."
+        )
+
+    # 2. Average Daily Consumption
+    with col2:
+        st.metric(
+            label="📈 Avg. Daily Consumption",
+            value=f"{df_filtered['Energy Consumption'].mean():.2f}",
+            help="Average energy consumed per day."
+        )
+
+    # 3. Anomalies Detected
+    with col3:
+        st.metric(
+            label="⚠️ Anomalies Detected",
+            value=df_filtered['Anomaly'].value_counts().get(-1, 0),
+            help="Number of outlier consumption values detected."
+        )
+
+
+
+
+st.markdown("###")
 
 # Layout grid
 col1, col2 = st.columns(2)
@@ -56,12 +90,14 @@ with col1:
                      title="Energy Consumption by Building Type")
     st.plotly_chart(fig_box, use_container_width=True)
 
+
 # 2. Scatter Plot: Square Footage vs Energy Consumption
 with col2:
     st.subheader("📊 Energy vs Square Footage")
     fig_scatter = px.scatter(df_filtered, x='Square Footage', y='Energy Consumption', color='Building Type',
                              title="Energy Consumption vs Square Footage")
     st.plotly_chart(fig_scatter, use_container_width=True)
+
 
 # 3. Heatmap of Correlation Matrix
 st.subheader("🔗 Feature Correlation Heatmap")
@@ -74,6 +110,7 @@ fig_heatmap = go.Figure(data=go.Heatmap(
 fig_heatmap.update_layout(title="Correlation Matrix", xaxis_nticks=36)
 st.plotly_chart(fig_heatmap, use_container_width=True)
 
+
 # 4. Bar Chart: Average Energy Consumption (Weekday vs Weekend)
 st.subheader("📅 Average Energy by Day Type")
 avg_energy = df_filtered.groupby('Day of Week')['Energy Consumption'].mean().reset_index()
@@ -81,14 +118,16 @@ fig_bar = px.bar(avg_energy, x='Day of Week', y='Energy Consumption', color='Day
                  title="Average Energy Consumption: Weekday vs Weekend")
 st.plotly_chart(fig_bar, use_container_width=True)
 
+
 # 5. Anomaly Detection using Isolation Forest
 st.subheader("⚠️ Anomaly Detection")
-iso_model = IsolationForest(contamination=0.1)
-df_filtered['Anomaly'] = iso_model.fit_predict(df_filtered[['Energy Consumption']])
+# iso_model = IsolationForest(contamination=0.1)
+# df_filtered['Anomaly'] = iso_model.fit_predict(df_filtered[['Energy Consumption']])
 fig_anomaly = px.scatter(df_filtered, x='Average Temperature', y='Energy Consumption',
                          color=df_filtered['Anomaly'].map({1: 'Normal', -1: 'Anomaly'}),
                          title="Energy Consumption vs Temperature (Anomaly Detection)")
 st.plotly_chart(fig_anomaly, use_container_width=True)
+
 
 # 6. Line Chart of Temperature vs Energy Consumption (using synthetic dates)
 st.subheader("🌡️ Temperature vs Energy Over Time")
@@ -96,6 +135,7 @@ df_filtered['Date'] = pd.date_range(start='2023-01-01', periods=len(df_filtered)
 fig_line = px.line(df_filtered.sort_values('Date'), x='Date', y=['Average Temperature', 'Energy Consumption'],
                    title="Temperature and Energy Consumption Trend")
 st.plotly_chart(fig_line, use_container_width=True)
+
 
 # 7. Energy Consumption Forecast using Prophet (using synthetic 'Date')
 df_time = df_filtered.copy()
@@ -106,10 +146,14 @@ model.fit(df_time[['ds', 'y']])
 future = model.make_future_dataframe(periods=7)
 forecast = model.predict(future)
 
+n_days = st.slider("🔮 Forecast Days Ahead", min_value=7, max_value=30, value=7)
+future = model.make_future_dataframe(periods=n_days)
+
 st.subheader(f"📈 Energy Consumption Forecast - {building_type}")
 fig_forecast = px.line(forecast, x='ds', y='yhat', labels={'ds': 'Date', 'yhat': 'Forecasted Energy (kWh)'},
-                       title=f"Next 7-Day Forecast for {building_type} Buildings")
+                       title=f"Next {n_days}-Day Forecast for {building_type} Buildings")
 st.plotly_chart(fig_forecast, use_container_width=True)
+
 
 # 8. Feature-Based Prediction Using Random Forest Regressor
 st.subheader("🔍 Power Usage Prediction")
@@ -119,7 +163,6 @@ X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=
 rfr = RandomForestRegressor(n_estimators=100, random_state=42)
 rfr.fit(X_train, y_train)
 predictions = rfr.predict(X_test)
-
 
 comparison_df = pd.DataFrame({
     'Actual': y_test,
@@ -170,6 +213,7 @@ forecast_trend = forecast['yhat'].diff().mean()
 if forecast_trend > 0:
     insights.append("Forecast predicts rising energy consumption—need to plan for renewable integration and consumption control.")
 
+
 # Prediction Insight
 r2_score = rfr.score(X_test, y_test)
 if r2_score > 0.7:
@@ -177,8 +221,10 @@ if r2_score > 0.7:
 
 # Displaying Insights
 for insight in insights:
-    st.markdown(f"◆   {insight}")
+    st.markdown(f"- {insight}")
 
+
+st.markdown("###")
 
 
 # Energy Recommendations
@@ -214,6 +260,27 @@ recommendations = {
 }
 for rec in recommendations[building_type]:
     st.markdown(f"- {rec}")
+
+# Adds space
+st.markdown("###")  
+
+
+# Join both sections with newlines
+combined_text = "⚡ Insights:\n" + "\n".join(f"- {insight}" for insight in insights)
+combined_text += "\n\n✅ Recommendations:\n" + "\n".join(f"- {rec}" for rec in recommendations)
+
+# Add some vertical spacing before button
+st.markdown("### 📥 Download Insights & Recommendations")
+st.download_button(
+    label="📄 Download Report",
+    data=combined_text,
+    file_name="Energy_Insights_and_Recommendations.txt",
+    mime="text/plain"
+)
+
+
+st.markdown("""<hr style="margin-top: 2rem;"><center><small>© 2025 Jayashri R K | Energy Optimization Dashboard</small></center>""", unsafe_allow_html=True)
+
 
 
 
